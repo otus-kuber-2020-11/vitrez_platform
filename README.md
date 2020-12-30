@@ -1,6 +1,28 @@
 # vitrez_platform
 vitrez Platform repository
 
+###### kubernetes-security ##########################################
+
+Что было сделано:
+
+- Создан Service Account bob с ролью admin в рамках всего кластера
+- Создан Service Account dave без доступа к кластеру
+для создания манифестов можно использовать dry-run запуск консольных команд:
+```
+kubectl create serviceaccount bob --dry-run=client -o yaml > 01-serviceaccount-bob.yaml
+kubectl create clusterrolebinding bob-rolebinding --clusterrole=admin --serviceaccount=default:bob  --dry-run=client -o yaml > 02-rolebinding-bob.yaml
+kubectl create serviceaccount dave --dry-run=client -o yaml > 03-serviceaccount-dave.yaml
+```
+
+- Создан Namespace prometheus
+- Создан Service Account carol в Namespace prometheus
+- Всем Service Account в Namespace prometheus дана возможность делать get, list, watch в отношении Pods всего кластера
+- Создан Namespace dev
+- Создан Service Account jane в Namespace dev
+- Service Account jane выдана роль admin в рамках Namespace dev
+- Создан Service Account ken в Namespace dev
+- Service Account ken выдана роль view в рамках Namespace dev
+
 ###### kubernetes-controllers ########################################
 
 Что было сделано:
