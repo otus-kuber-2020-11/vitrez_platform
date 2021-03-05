@@ -1,0 +1,8 @@
+redis:
+  usePassword: False
+  master:
+    persistence:
+      enabled: false
+  slave:
+    persistence:
+      enabled: false   

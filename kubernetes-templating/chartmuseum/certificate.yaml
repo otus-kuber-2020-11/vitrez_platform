@@ -1,0 +1,14 @@
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: selfsigned-crt
+  namespace: chartmuseum
+spec:
+  secretName: chartmuseum-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned
+  commonName: "chartmuseum.k8s.local"
+  dnsNames:
+  - "chartmuseum.k8s.local"
