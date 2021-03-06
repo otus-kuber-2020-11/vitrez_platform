@@ -1,0 +1,14 @@
+---
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: harbor-crt
+  namespace: harbor
+spec:
+  secretName: harbor-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: selfsigned
+  commonName: "harbor.k8s.local"
+  dnsNames:
+  - "harbor.k8s.local"

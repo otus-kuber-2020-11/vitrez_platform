@@ -1,0 +1,60 @@
+---
+repositories:
+- name: jetstack
+  url: https://charts.jetstack.io
+
+- name: harbor
+  url: https://helm.goharbor.io
+
+- name: stable
+  url: https://kubernetes.github.io/ingress-nginx
+
+releases:
+- name: ingress-nginx
+  chart: ingress-nginx/ingress-nginx
+  version: 3.17.0
+  namespace: ingress-nginx
+        
+- name: cert-manager
+  chart: jetstack/cert-manager
+  version: 1.1.0
+  namespace: cert-manager
+  wait: true
+  timeout: 600
+  values:
+    - installCRDs: true 
+  hooks:
+    - events: ["prepare"]
+      command: "/bin/sh"
+      args:
+      - "-c"
+      - >-
+        kubectl get namespace cert-manager >/dev/null 2>&1 || kubectl create namespace cert-manager;
+    - events: ["presync"]
+      command: "kubectl"
+      args: ["label", "namespace", "cert-manager", "certmanager.k8s.io/disable-validation=true"]
+    - events: ["cleanup"]
+      command: "kubectl"
+      args: ["apply", "-f", "../cert-manager/selfSigned.yaml"]
+
+- name: harbor
+  chart: harbor/harbor
+  version: 1.1.2
+  namespace: harbor
+  wait: true
+  timeout: 600
+  needs:
+  - cert-manager/cert-manager
+  values:
+    - ./values/harbor-values.yaml
+  hooks:
+    - events: ["prepare"]
+      command: "/bin/sh"
+      args:
+      - "-c"
+      - >-
+        kubectl get namespace harbor >/dev/null 2>&1 || kubectl create namespace harbor;
+    - events: ["postsync"]
+      command: "kubectl"
+      args: ["apply", "-f", "../harbor/certificate.yaml"]
+
