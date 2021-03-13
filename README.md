@@ -1,6 +1,56 @@
 # vitrez_platform
 vitrez Platform repository
 
+## kubernetes-operators
+
+### MySQL контроллер
+Вопрос: почему объект создался, хотя мы создали CR, до того, как запустили контроллер?
+Ответ: потому что событие никто не вычитал, оно висело в очереди kube-apiserver. После создания контроллер вычитал и обработал событие.
+
+- Проверяем что появились pvc:
+```
+$ kubectl get pvc
+NAME                        STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+backup-mysql-instance-pvc   Bound    pvc-fcdd1f11-de02-4aa1-9ec6-3152a10ad2fe   1Gi        RWO            standard       6m27s
+mysql-instance-pvc          Bound    pvc-3696f963-0d92-4433-9068-aa3c7fc6e9dc   1Gi        RWO            standard       6m27s
+```
+
+- Создадим вручную и наполним тестовую таблицу, проверим ее содержимое:
+```
++----+-------------+
+| id | name        |
++----+-------------+
+|  1 | some data   |
+|  2 | some data-2 |
++----+-------------+
+```
+
+- Удалим mysql-instance и проверим наличие pv:
+```bash
+$ kubectl get pv
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM                               STORAGECLASS   REASON   AGE
+backup-mysql-instance-pv                   1Gi        RWO            Retain           Available                                                               154m
+```
+
+- Создадим заново mysql-instance и, не создавая таблицу, посмотрим ее наличие:
+```bash
++----+-------------+
+| id | name        |
++----+-------------+
+|  1 | some data   |
+|  2 | some data-2 |
++----+-------------+
+```
+  Очевидно, что оператор отработал и база взята из бэкапа.
+
+- Вывод комманды kubectl get jobs:
+```bash
+$ kubectl get jobs
+NAME                         COMPLETIONS   DURATION   AGE
+backup-mysql-instance-job    1/1           3s         95s
+restore-mysql-instance-job   1/1           73s        79s
+```
+
 ## kubernetes-templating
 
 ### 1) Подготовительные работы:
