@@ -6,54 +6,64 @@ vitrez Platform repository
 
   ## kubernetes-monitor
 
-Выбран 4 вариант сложности: Поставить prometheus-operator при помощи helm3.
+Выбран 4 вариант сложности: поставить prometheus-operator при помощи helm3.
 
 - Helm-чарт для prometheus-operator называется kube-prometheus-stack. Переопределяем нужные нам параметры в values.yaml и ставим его:
 ```
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack -f kube-prometheus-stack/values.yaml --namespace monitor --create-namespace
 ```
+- Добавляем адреса Ingress, указанные нами в values, в файл C:\Windows\System32\drivers\etc\hosts чтобы открывать их в браузере:
+```
+172.16.255.2		grafana.k8s.local
+172.16.255.2		prometheus.k8s.local
+172.16.255.2		alertmanager.k8s.local
+```
 
 - Т.к. кластер K8s у меня локальный (на базе k1s), то возникли некоторые проблемы с мониторингом:
   - не мониторятся kube-proxy на нодах
   - не мониторится etcd
-Решим эти проблемы.
-  1) По дефолту kube-proxy отдает метрики только через localhost.
+
+  Решим эти проблемы.
+
+1) По дефолту kube-proxy отдает метрики только через localhost.
 Чтобы prometheus-operator смог забирать метрики нужно чтобы kube-proxy слушал адрес 0.0.0.0. Для этого необходимо поправить его настройки в ConfigMap:
 ```
 $ kubectl edit configmaps kube-proxy -n kube-system
 ```
-устанавливаем следующий параметр:
+  устанавливаем следующий параметр:
 ```
 metricsBindAddress: "0.0.0.0:10249"
 ```
-Сохраняем и перзапускаем поды DaemonSet kube-proxy:
+  сохраняем и перзапускаем поды DaemonSet kube-proxy:
 ```
 $ kubectl rollout restart daemonset kube-proxy -n kube-system
 ```
-  2) Чтобы снимать метрики с etcd необходима двусторонняя аутентификация по mtls.
+2) Чтобы снимать метрики с etcd необходима двусторонняя аутентификация по mtls.
 Создадим сертификаты для Prometheus чтобы он мог успешно подключаться к etcd.
-Для этого залогинимся на master-ноду (там развернут инстанс etcd) и скопируем клиентские сертификаты в новый secret:
+
+  для этого залогинимся на master-ноду (там развернут инстанс etcd) и скопируем клиентские сертификаты в новый secret:
 ```
 kubectl create secret generic etcd-client-cert -n monitoring \
   --from-literal=etcd-ca="$(cat /etc/kubernetes/pki/etcd/ca.crt)" \
   --from-literal=etcd-client="$(cat /etc/kubernetes/pki/etcd/healthcheck-client.crt)" \
   --from-literal=etcd-client-key="$(cat /etc/kubernetes/pki/etcd/healthcheck-client.key)"
 ```
-теперь отредактируем файл переменных для helm-чарта, добавив имя secret в prometheusSpec:
+  теперь отредактируем файл переменных для helm-чарта, добавив имя secret в prometheusSpec:
 ```
 prometheusSpec:
   secrets:
       - etcd-client-cert
 ```
-перенакатим чарт:
+  перенакатим чарт:
 ```
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack -f kube-prometheus-stack/values.yaml
 ```
-Все, проблемные сервисы завсветились в Prometheus:
-kube-proxy:
+  Все, проблемные сервисы завсветились в Prometheus:
+
+  kube-proxy:
 ![screen1](kubernetes-monitoring/images/prometheus_kube-proxy.png)
 
-etcd:
+  etcd:
 ![screen2](kubernetes-monitoring/images/prometheus_etcd.png)
 
 - Развернут Deployment с нашим приложением в виде контейнера nginx и sidecar-контейнера [nginx-prometheus-exporter](https://github.com/nginxinc/nginx-prometheus-exporter)
@@ -64,8 +74,9 @@ stub_status;
 }
 ``` 
 Экспортеру передается аргумент для сбора метрик:
- args: [ "-nginx.scrape-uri", "http://localhost:8000/basic_status" ]
-
+```
+args: [ "-nginx.scrape-uri", "http://localhost:8000/basic_status" ]
+```
 Также развернуты [Service](kubernetes-monitoring/web-svc-headless.yaml) и [Ingress](kubernetes-monitoring/ingress.yaml) для нашего приложения.
 
 - Создан объект ServiceMonitor для сервиса приложения:
