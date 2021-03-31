@@ -1,0 +1,109 @@
+prometheusOperator:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    # здесь secret по имени etcd-client-cert должен быть создан до применения helm-чарта и в том же namespace
+    secrets:
+      - etcd-client-cert
+
+##  serviceMonitorSelector:
+##    matchLabels:
+##      prometheus: default
+
+  resources:
+    limits:
+      memory: 500Mi
+    requests:
+      memory: 300Mi
+      cpu: 10m
+
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts:	 
+      - prometheus.k8s.local
+
+kubeEtcd:
+  enabled: true
+  service:
+    port: 2379
+    targetPort: 2379
+    selector:
+      component: etcd
+
+  serviceMonitor:
+    scheme: https
+    insecureSkipVerify: false
+    serverName: localhost
+    caFile: /etc/prometheus/secrets/etcd-client-cert/etcd-ca
+    certFile: /etc/prometheus/secrets/etcd-client-cert/etcd-client
+    keyFile: /etc/prometheus/secrets/etcd-client-cert/etcd-client-key
+
+kubeDns:
+  enabled: false 
+kubeScheduler:
+  enabled: false
+coreDns:
+  enabled: true
+kubeControllerManager:
+  enabled: false
+grafana:
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      memory: 64Mi
+      cpu: 10m
+  enabled: true
+  ingress:
+    enabled: true 
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts: 
+      - grafana.k8s.local
+alertmanager:
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      kubernetes.io/tls-acme: "true"
+    hosts:
+      - alertmanager.k8s.local
+  config:
+    global:
+      slack_api_url: 'https://hooks.slack.com/services/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'
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname","job"]
+      group_wait: 1s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: "null"
+      routes:
+      - match_re:
+          alertname: Watchdog
+        receiver: "null"
+      - match_re:
+          severity: "warning|critical"
+        receiver: "slack"
+  
+    receivers:
+    - name: "null"
+    - name: "slack"   
+      slack_configs:
+        - channel: "#alerts-from-apps"
+          send_resolved: true
+
+
+

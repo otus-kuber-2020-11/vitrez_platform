@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+  labels:
+    app: web
+spec:
+  selector:
+    app: web
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8000
+    - name: nginx-exporter
+      protocol: TCP
+      port: 9113

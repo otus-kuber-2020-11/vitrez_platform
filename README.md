@@ -1,7 +1,90 @@
 # vitrez_platform
 vitrez Platform repository
 
-## kubernetes-operators
+<details>
+  <summary>## Домашняя работа 8</summary>
+
+  ## kubernetes-monitor
+
+Выбран 4 вариант сложности: Поставить prometheus-operator при помощи helm3.
+
+- Helm-чарт для prometheus-operator называется kube-prometheus-stack. Переопределяем нужные нам параметры в values.yaml и ставим его:
+```
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack -f kube-prometheus-stack/values.yaml --namespace monitor --create-namespace
+```
+
+- Т.к. кластер K8s у меня локальный (на базе k1s), то возникли некоторые проблемы с мониторингом:
+  - не мониторятся kube-proxy на нодах
+  - не мониторится etcd
+Решим эти проблемы.
+  1) По дефолту kube-proxy отдает метрики только через localhost.
+Чтобы prometheus-operator смог забирать метрики нужно чтобы kube-proxy слушал адрес 0.0.0.0. Для этого необходимо поправить его настройки в ConfigMap:
+```
+$ kubectl edit configmaps kube-proxy -n kube-system
+```
+устанавливаем следующий параметр:
+```
+metricsBindAddress: "0.0.0.0:10249"
+```
+Сохраняем и перзапускаем поды DaemonSet kube-proxy:
+```
+$ kubectl rollout restart daemonset kube-proxy -n kube-system
+```
+  2) Чтобы снимать метрики с etcd необходима двусторонняя аутентификация по mtls.
+Создадим сертификаты для Prometheus чтобы он мог успешно подключаться к etcd.
+Для этого залогинимся на master-ноду (там развернут инстанс etcd) и скопируем клиентские сертификаты в новый secret:
+```
+kubectl create secret generic etcd-client-cert -n monitoring \
+  --from-literal=etcd-ca="$(cat /etc/kubernetes/pki/etcd/ca.crt)" \
+  --from-literal=etcd-client="$(cat /etc/kubernetes/pki/etcd/healthcheck-client.crt)" \
+  --from-literal=etcd-client-key="$(cat /etc/kubernetes/pki/etcd/healthcheck-client.key)"
+```
+теперь отредактируем файл переменных для helm-чарта, добавив имя secret в prometheusSpec:
+```
+prometheusSpec:
+  secrets:
+      - etcd-client-cert
+```
+перенакатим чарт:
+```
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack -f kube-prometheus-stack/values.yaml
+```
+Все, проблемные сервисы завсветились в Prometheus:
+kube-proxy:
+![screen1](kubernetes-monitoring/images/prometheus_kube-proxy.png)
+
+etcd:
+![screen2](kubernetes-monitoring/images/prometheus_etcd.png)
+
+- Развернут Deployment с нашим приложением в виде контейнера nginx и sidecar-контейнера [nginx-prometheus-exporter](https://github.com/nginxinc/nginx-prometheus-exporter)
+В конфигурации nginx через ConfigMap включаем отдачу метрик:
+```
+location = /basic_status {
+stub_status;
+}
+``` 
+Экспортеру передается аргумент для сбора метрик:
+ args: [ "-nginx.scrape-uri", "http://localhost:8000/basic_status" ]
+
+Также развернуты [Service](kubernetes-monitoring/web-svc-headless.yaml) и [Ingress](kubernetes-monitoring/ingress.yaml) для нашего приложения.
+
+- Создан объект ServiceMonitor для сервиса приложения:
+```
+kubectcl apply -f kubernetes-monitoring/web-servicemonitor.yaml
+```
+Теперь его можно увидеть и в Prometheus:
+![screen3](kubernetes-monitoring/images/prometheus_web-app.png)
+
+и в Grafana:
+![screen4](kubernetes-monitoring/images/grafana_web-app.png)
+
+</details>
+
+
+<details>
+  <summary>## Домашняя работа 7</summary>
+  
+  ## kubernetes-operators
 
 ### MySQL контроллер
 Вопрос: почему объект создался, хотя мы создали CR, до того, как запустили контроллер?
@@ -51,7 +134,12 @@ backup-mysql-instance-job    1/1           3s         95s
 restore-mysql-instance-job   1/1           73s        79s
 ```
 
-## kubernetes-templating
+</details>
+
+<details>
+  <summary>## Домашняя работа 6</summary>
+  
+  ## kubernetes-templating
 
 ### 1) Подготовительные работы:
 
@@ -166,8 +254,12 @@ kubecfg update services.jsonnet --namespace hipster-shop
 ```
 kubectl apply -k kubernetes-templating/kustomize/overrides/hipster-shop
 ```
+</details>
 
-## kubernetes-volumes
+<details>
+  <summary>## Домашняя работа 5</summary>
+  
+  ## kubernetes-volumes
 
 Что было сделано:
 
@@ -176,7 +268,12 @@ kubectl apply -k kubernetes-templating/kustomize/overrides/hipster-shop
 - Задание со *
 Добавлены манифесты для secret и манифест Statefulset с их использованием
 
-## kubernetes-network
+</details>
+
+<details>
+  <summary>## Домашняя работа 4</summary>
+
+  ## kubernetes-network
 
 Что было сделано:
 
@@ -201,7 +298,12 @@ kubectl apply -k kubernetes-templating/kustomize/overrides/hipster-shop
 - Задание со * Canary для Ingress
 Реализовано канареечное развертывание с помощью ingress-nginx: часть трафика перенаправляется на выделенную группу подов используя вес (в процентах).
 
-## kubernetes-security
+</details>
+
+<details>
+  <summary>## Домашняя работа 3</summary>
+
+  ## kubernetes-security
 
 Что было сделано:
 
@@ -223,7 +325,12 @@ kubectl create serviceaccount dave --dry-run=client -o yaml > 03-serviceaccount-
 - Создан Service Account ken в Namespace dev
 - Service Account ken выдана роль view в рамках Namespace dev
 
-## kubernetes-controllers
+</details>
+
+<details>
+  <summary>## Домашняя работа 2</summary>
+
+  ## kubernetes-controllers
 
 Что было сделано:
 
@@ -238,7 +345,12 @@ kubectl create serviceaccount dave --dry-run=client -o yaml > 03-serviceaccount-
 - Добавил описание readinessProbe
 - Нашел node-exporter-daemonset.yaml, отредактировал и убедился, что он разворачивается в том числе и на master нодах
 
-## kubernetes-intro
+</details>
+
+<details>
+  <summary>## Домашняя работа 1</summary>
+
+  ## kubernetes-intro
 
 Что было сделано:
 
@@ -249,3 +361,4 @@ kubectl create serviceaccount dave --dry-run=client -o yaml > 03-serviceaccount-
 - Написан манифест web-pod.yaml;
 - Выяснена причина, по которой pod frontend находился в статусе Error, в логах пода было  panic: environment variable "PRODUCT_CATALOG_SERVICE_ADDR" not set; Соответственно был добавлен набор переменных из оригинального манифеста в frontend-pod-healthy.yaml.
 
+</details>
