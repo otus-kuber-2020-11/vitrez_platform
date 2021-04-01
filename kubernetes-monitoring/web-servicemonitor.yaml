@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: web-monitor
+  namespace: default
+  labels:
+    prometheus: default
+spec:
+  selector:
+    matchLabels:
+      app: web
+  namespaceSelector:
+    matchNames:
+      - default
+  endpoints:
+    - port: nginx-exporter
