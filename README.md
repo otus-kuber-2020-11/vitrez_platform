@@ -24,9 +24,9 @@ vitrez Platform repository
 Т.к. у меня Fluent Bit устанавливается сразу на все ноды кластера, то проблем с поиском логов nginx-ingress-controller не возникло.  
 Поменяем формат логов у нашего nginx-ingress на формат JSON. Для этого изменим конфигурацию через nginx-ingress.values.yaml добавив ключи log-format-escape-json и log-format-upstream.  
 Создали в Kibana визуализации для отображения запросов к nginx-ingress со статусами:  
-200-299
-300-399
-400-499
+200-299  
+300-399  
+400-499  
 500+  
 На их базе создали дашборд kibana и выгрузили в формате [json](kubernetes-logging/export.ndjson)  
 
