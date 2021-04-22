@@ -9,31 +9,31 @@ vitrez Platform repository
 Все домашнее задание выполнялось на локальном кластере, поэтому выполнено учитывая его специфику. 
 
 #### Установка и мониторинг EFK стека
-- Установлены EFK-стэк (ElasticSearch, Fluent Bit, Kibana) и nginx-ingress-controller с помощью Helm-чартов и своих values.
-Из-за ограниченности системных ресурсов пришлось запускать кластер Elasticsearch всего из одной ноды и регулировать запрашиваемые ресурсы во всех чартах.
+- Установлены EFK-стэк (ElasticSearch, Fluent Bit, Kibana) и nginx-ingress-controller с помощью Helm-чартов и своих values.  
+Из-за ограниченности системных ресурсов пришлось запускать кластер Elasticsearch всего из одной ноды и регулировать запрашиваемые ресурсы во всех чартах.  
 По этой же причине не использовал taint\tolerations.
 
-- Воспользовались во fluent-bit фильтром Modify, который позволил удалить из логов "лишние" ключи time и @timestamp.
+- Воспользовались во fluent-bit фильтром Modify, который позволил удалить из логов "лишние" ключи time и @timestamp.  
 Настройку проводим через параметры в fluent-bit.values.yaml
 
-- Установили Grafana, Prometheus и prometheus-operator из helm-чарта kube-prometheus-stack. 
-Добавили prometheus exporter для ElasticSearch из [helm-чарта](https://github.com/justwatchcom/elasticsearch_exporter) 
-В графану залит популярный дашборд для мониторинга elasticsearch. Рассмотрели его ключевые метрики.
+- Установили Grafana, Prometheus и prometheus-operator из helm-чарта kube-prometheus-stack.  
+Добавили prometheus exporter для ElasticSearch из [helm-чарта](https://github.com/justwatchcom/elasticsearch_exporter)  
+В графану залит популярный дашборд для мониторинга elasticsearch. Рассмотрели его ключевые метрики.  
 
-- Логи контроллера Nginx Ingress.
-Т.к. у меня Fluent Bit устанавливается сразу на все ноды кластера, то проблем с поиском логов nginx-ingress-controller не возникло.
-Поменяем формат логов у нашего nginx-ingress на формат JSON. Для этого изменим конфигурацию через nginx-ingress.values.yaml добавив ключи log-format-escape-json и log-format-upstream.
-Создали в Kibana визуализации для отображения запросов к nginx-ingress со статусами:
+- Логи контроллера Nginx Ingress.  
+Т.к. у меня Fluent Bit устанавливается сразу на все ноды кластера, то проблем с поиском логов nginx-ingress-controller не возникло.  
+Поменяем формат логов у нашего nginx-ingress на формат JSON. Для этого изменим конфигурацию через nginx-ingress.values.yaml добавив ключи log-format-escape-json и log-format-upstream.  
+Создали в Kibana визуализации для отображения запросов к nginx-ingress со статусами:  
 200-299
 300-399
 400-499
-500+
-На их базе создали дашборд kibana и выгрузили в формате [json](kubernetes-logging/export.ndjson)
+500+  
+На их базе создали дашборд kibana и выгрузили в формате [json](kubernetes-logging/export.ndjson)  
 
 #### Установка Loki: сбор и визуализация логов в Grafana.
-- Установили Loki и Promtail с помощью [helm-чарта](https://grafana.github.io/loki/charts)
-Изменили конфигурацию prometheus-operator таким образом,чтобы datasource графаны для Loki создавался сразу после установки оператора.
-Выложил итоговый [values](kubernetes-logging/kube-prometheus-stack.values.yaml) для prometheus-operator.
+- Установили Loki и Promtail с помощью [helm-чарта](https://grafana.github.io/loki/charts)  
+Изменили конфигурацию prometheus-operator таким образом,чтобы datasource графаны для Loki создавался сразу после установки оператора.  
+Выложил итоговый [values](kubernetes-logging/kube-prometheus-stack.values.yaml) для prometheus-operator.  
 
 - Изменили [values](kubernetes-logging/nginx-ingress.values.yaml) для контроллера nginx-ingress таким образом, чтобы он начал отдавать метрики в формате prometheus:
 ```
