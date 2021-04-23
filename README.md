@@ -2,7 +2,126 @@
 vitrez Platform repository
 
 <details>
-  <summary>## Домашняя работа 8</summary>
+  <summary> Домашняя работа 9</summary>
+
+## kubernetes-logging
+
+Все домашнее задание выполнялось на локальном кластере, поэтому выполнено учитывая его специфику. 
+
+#### Установка и мониторинг EFK стека
+- Установлены EFK-стэк (ElasticSearch, Fluent Bit, Kibana) и nginx-ingress-controller с помощью Helm-чартов и своих values.  
+Из-за ограниченности системных ресурсов пришлось запускать кластер Elasticsearch всего из одной ноды и регулировать запрашиваемые ресурсы во всех чартах.  
+По этой же причине не использовал taint\tolerations.
+
+- Воспользовались во fluent-bit фильтром Modify, который позволил удалить из логов "лишние" ключи time и @timestamp.  
+Настройку проводим через параметры в fluent-bit.values.yaml
+
+- Установили Grafana, Prometheus и prometheus-operator из helm-чарта kube-prometheus-stack.  
+Добавили prometheus exporter для ElasticSearch из [helm-чарта](https://github.com/justwatchcom/elasticsearch_exporter)  
+В графану залит популярный дашборд для мониторинга elasticsearch. Рассмотрели его ключевые метрики.  
+
+- Логи контроллера Nginx Ingress.  
+Т.к. у меня Fluent Bit устанавливается сразу на все ноды кластера, то проблем с поиском логов nginx-ingress-controller не возникло.  
+Поменяем формат логов у нашего nginx-ingress на формат JSON. Для этого изменим конфигурацию через nginx-ingress.values.yaml добавив ключи log-format-escape-json и log-format-upstream.  
+Создали в Kibana визуализации для отображения запросов к nginx-ingress со статусами:  
+200-299  
+300-399  
+400-499  
+500+  
+На их базе создали дашборд kibana и выгрузили в формате [json](kubernetes-logging/export.ndjson)  
+
+#### Установка Loki: сбор и визуализация логов в Grafana.
+- Установили Loki и Promtail с помощью [helm-чарта](https://grafana.github.io/loki/charts)  
+Изменили конфигурацию prometheus-operator таким образом,чтобы datasource графаны для Loki создавался сразу после установки оператора.  
+Выложил итоговый [values](kubernetes-logging/kube-prometheus-stack.values.yaml) для prometheus-operator.  
+
+- Изменили [values](kubernetes-logging/nginx-ingress.values.yaml) для контроллера nginx-ingress таким образом, чтобы он начал отдавать метрики в формате prometheus:
+```
+metrics:
+    enabled: true
+    service:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "10254"
+```
+
+и создавал объект serviceMonitor для prometheus-operator:
+```
+serviceMonitor:
+      port: 10254
+      enabled: true
+```
+
+- Cоздали дашборд в графане, на котором одновременно вывели метрики контроллера nginx-ingress и его логи:
+  - добавлены переменные для возможности выбора на дашборде инстанса nginx-ingress, неймспейса и класса контроллера
+  - добавлена панель с графиком объема всех запросов к контроллеру nginx-ingress
+  - добавлена панель с графиком числа неуспешных запросов (4хх-5хх)
+  - добавлена панель с логами контроллера
+Сам дашборд выгрузилив в формате [JSON](kubernetes-logging/nginx-ingress.json).
+
+#### Задание со * [Audit logging]
+Для сбора логов аудита кластера (api-server) нам нужно вначале включить их создание\ведение на кластере, а потом сбор их через fluentbit.
+Теперь по шагам:
+1) Создаем файлик с политикой аудита [audit-policy.yaml](kubernetes-logging/audit-policy.yaml) (для простоты включил сохранение метаданных всех событий) и кладем его на ноду с kube-apiserver.
+Теперь редактируем параметры запуска kube-apiserver через правку манифеста его StaticPod на мастер-ноде. Добавляем следующие блоки:
+
+```
+# vi /etc/kubernetes/manifests/kube-apiserver.yaml
+
+...
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --audit-policy-file=/etc/kubernetes/audit-policy.yaml
+    - --audit-log-path=/var/log/kube-apiserver-audit.log
+    - --audit-log-maxage=1
+    - --audit-log-maxbackup=2
+    - --audit-log-maxsize=20
+
+
+...
+volumeMounts:
+  - mountPath: /etc/kubernetes/audit-policy.yaml
+    name: audit
+    readOnly: true
+  - mountPath: /var/log/kube-apiserver-audit.log
+    name: audit-log
+    readOnly: false
+
+...
+volumes:
+- name: audit
+  hostPath:
+    path: /etc/kubernetes/audit-policy.yaml
+    type: File
+
+- name: audit-log
+  hostPath:
+    path: /var/log/kube-apiserver-audit.log
+    type: FileOrCreate
+```
+
+2) Редактируем fluentbit.values.yaml и добавляем секцию:
+``` 
+audit:
+  enable: true
+  input:
+    path: /var/log/kube-apiserver-audit.log
+```
+
+#### Задание со * [Host logging]
+Для сбора логов с виртуальных машин, где запущен K8s (его сервисы kubelet) редактируем fluentbit.values.yaml и добавляем секцию:
+```
+input:
+  systemd:
+    enabled: true
+```
+
+</details>
+
+<details>
+  <summary> Домашняя работа 8</summary>
 
   ## kubernetes-monitor
 
@@ -10,7 +129,7 @@ vitrez Platform repository
 
 - Helm-чарт для prometheus-operator называется kube-prometheus-stack. Переопределяем нужные нам параметры в values.yaml и ставим его:
 ```
-helm upgrade --install prometheus prometheus-community/kube-prometheus-stack -f kube-prometheus-stack/values.yaml --namespace monitor --create-namespace
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack -f kube-prometheus-stack/values.yaml --namespace monitoring --create-namespace
 ```
 - Добавляем адреса Ingress, указанные нами в values, в файл C:\Windows\System32\drivers\etc\hosts чтобы открывать их в браузере:
 ```
@@ -93,7 +212,7 @@ kubectcl apply -f kubernetes-monitoring/web-servicemonitor.yaml
 
 
 <details>
-  <summary>## Домашняя работа 7</summary>
+  <summary> Домашняя работа 7</summary>
   
   ## kubernetes-operators
 
@@ -148,7 +267,7 @@ restore-mysql-instance-job   1/1           73s        79s
 </details>
 
 <details>
-  <summary>## Домашняя работа 6</summary>
+  <summary> Домашняя работа 6</summary>
   
   ## kubernetes-templating
 
@@ -268,7 +387,7 @@ kubectl apply -k kubernetes-templating/kustomize/overrides/hipster-shop
 </details>
 
 <details>
-  <summary>## Домашняя работа 5</summary>
+  <summary> Домашняя работа 5</summary>
   
   ## kubernetes-volumes
 
@@ -282,7 +401,7 @@ kubectl apply -k kubernetes-templating/kustomize/overrides/hipster-shop
 </details>
 
 <details>
-  <summary>## Домашняя работа 4</summary>
+  <summary> Домашняя работа 4</summary>
 
   ## kubernetes-network
 
@@ -312,7 +431,7 @@ kubectl apply -k kubernetes-templating/kustomize/overrides/hipster-shop
 </details>
 
 <details>
-  <summary>## Домашняя работа 3</summary>
+  <summary> Домашняя работа 3</summary>
 
   ## kubernetes-security
 
@@ -339,7 +458,7 @@ kubectl create serviceaccount dave --dry-run=client -o yaml > 03-serviceaccount-
 </details>
 
 <details>
-  <summary>## Домашняя работа 2</summary>
+  <summary> Домашняя работа 2</summary>
 
   ## kubernetes-controllers
 
@@ -359,7 +478,7 @@ kubectl create serviceaccount dave --dry-run=client -o yaml > 03-serviceaccount-
 </details>
 
 <details>
-  <summary>## Домашняя работа 1</summary>
+  <summary> Домашняя работа 1</summary>
 
   ## kubernetes-intro
 

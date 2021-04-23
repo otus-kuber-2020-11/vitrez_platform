@@ -1,0 +1,74 @@
+prometheusOperator:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    # здесь secret по имени etcd-client-cert должен быть создан до применения helm-чарта и в том же namespace
+    #secrets:
+    #  - etcd-client-cert
+  resources:
+    limits:
+      memory: 400Mi
+    requests:
+      memory: 200Mi
+
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts:	 
+      - prometheus.k8s.local
+
+  #additionalServiceMonitors:
+  #  - name: "ingress-nginx-controller"
+  #    selector: 
+  #      matchLabels:
+  #        app.kubernetes.io/name: ingress-nginx
+  #    namespaceSelector:
+  #      matchNames:
+  #        - ingress-nginx
+  #    endpoints:
+  #      - port: metrics
+
+kubeEtcd:
+  enabled: false
+kubeDns:
+  enabled: false 
+kubeScheduler:
+  enabled: false
+coreDns:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+
+grafana:
+  resources:
+    limits:
+      memory: 128Mi
+    requests:
+      memory: 64Mi
+  enabled: true
+  ingress:
+    enabled: true 
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts: 
+      - grafana.k8s.local
+  additionalDataSources:
+    - name: loki
+      access: proxy
+      type: loki
+      url: http://loki:3100
+
+alertmanager:
+  enabled: false
+
